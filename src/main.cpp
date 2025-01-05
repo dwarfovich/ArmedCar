@@ -46,7 +46,7 @@ void setup()
         Serial.print(", controllerType = ");
         Serial.print(static_cast<int>(controllerType));
         Serial.print(". Program execution stopped...");
-        stopProgram();
+        //stopProgram();
     } else {
         Serial.print("Configuration successful.");
     }
