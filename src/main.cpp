@@ -14,7 +14,7 @@ constexpr unsigned long readControllerDataDelay = 50;
 constexpr int pliersPin          = 9;
 constexpr int handRotationPin    = 14;
 constexpr int handVerticalPin1   = 15;
-constexpr int handVerticalPin2    = 8;
+constexpr int handVerticalPin2   = 8;
 constexpr int leftWheelMotorPin  = 3;
 constexpr int rightWheelMotorPin = 5;
 
@@ -40,48 +40,60 @@ void setup()
     if (configurationErrorCode == ps2::ErrorCode::Success) {
         controllerType = controller.type();
     }
-    if (configurationErrorCode != ps2::ErrorCode::Success || controllerType != ps2::ControllerType::WirelessDualShock){
+    if (configurationErrorCode != ps2::ErrorCode::Success || controllerType != ps2::ControllerType::WirelessDualShock) {
         Serial.print("Failed to configure controller, errorCode = ");
         Serial.print(static_cast<int>(configurationErrorCode));
-        Serial.print(", controllerType = " );
+        Serial.print(", controllerType = ");
         Serial.print(static_cast<int>(controllerType));
         Serial.print(". Program execution stopped...");
         stopProgram();
-    } else{
+    } else {
         Serial.print("Configuration successful.");
     }
     setupMotors();
 }
 
-void stopProgram(){
-    while(true){};
+void stopProgram()
+{
+    while (true) {
+    };
 }
 
 void setupMotors()
 {
     rotationMotor.attach(handRotationPin);
     verticalMotor1.attach(handVerticalPin1);
+    verticalMotor2.attach(handVerticalPin2);
 }
 
 void loop()
 {
-        controller.readData();
+    controller.readData();
 
-        const auto rightStickX = controller.analogButtonState(PSS_RX);
-        const auto rotationX = map(rightStickX, 0, 256, 3, -3);
-        Serial.print(rightStickX);
+    auto rightStick = controller.analogButtonState(PSS_RX);
+     auto rotation   = map(rightStick, 0, 256, 5, -5);
+    if (rotation < -1 || rotation > 1) {
+        Serial.print(rightStick);
         Serial.print(" ");
-        Serial.print(rotationX);
+        Serial.print(rotation);
         Serial.println(";");
-        rotationMotor.write(rotationMotor.read() + rotationX);
+        rotationMotor.write(rotationMotor.read() + rotation);
+    }
 
-        const auto rightStickY = controller.analogButtonState(PSS_RY);
-        const auto rotationY = map(rightStickY, 0, 256, -3, 3);
-        Serial.print(rightStickY);
+    rightStick = controller.analogButtonState(PSS_RY);
+    rotation   = map(rightStick, 0, 256, -5, 5);
+    if (rotation < -1 || rotation > 1) {
+        Serial.print(rightStick);
         Serial.print(" - ");
-        Serial.print(rotationY);
+        Serial.print(rotation);
         Serial.println(";");
-        verticalMotor1.write(verticalMotor1.read() + rotationY);
+        verticalMotor1.write(verticalMotor1.read() + rotation);
+    }
 
-        delay(readControllerDataDelay);
+    if(controller.buttonPressed(PSB_TRIANGLE)){
+        verticalMotor2.write(verticalMotor2.read() + 3);
+    } else if (controller.buttonPressed(PSB_CROSS)){
+        verticalMotor2.write(verticalMotor2.read() - 3);
+    }
+    delay(readControllerDataDelay);
 }
