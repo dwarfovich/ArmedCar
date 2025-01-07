@@ -10,27 +10,118 @@ constexpr bool          enableRumble            = true;
 constexpr unsigned long baudRate                = 57600;
 constexpr unsigned long serialMonitorStartDelay = 300;
 constexpr unsigned long readControllerDataDelay = 50;
+#define STICK_X_CENTER_VALUE 128
+#define STICK_Y_CENTER_VALUE 127
 
-constexpr int pliersPin          = 9;
-constexpr int handRotationPin    = 14;
-constexpr int handVerticalPin1   = 15;
-constexpr int handVerticalPin2   = 8;
-constexpr int leftWheelMotorPin  = 3;
-constexpr int rightWheelMotorPin = 5;
+constexpr int pliersPin        = 8;
+constexpr int handRotationPin  = 14;
+constexpr int handVerticalPin1 = 15;
+constexpr int handVerticalPin2 = 9;
+
+int LEFT_MOTOR_PWM_PIN  = 3;
+int LEFT_MOTOR_IN1_PIN  = 1;
+int LEFT_MOTOR_IN2_PIN  = 2;
+int RIGHT_MOTOR_PWM_PIN = 5;
+int RIGHT_MOTOR_IN1_PIN = 4;
+int RIGHT_MOTOR_IN2_PIN = 6;
 
 ps2::Controller     controller;
 ps2::ErrorCode      configurationErrorCode;
 ps2::ControllerType controllerType;
 
-Servo leftMotor;
-Servo rightMotor;
 Servo verticalMotor1;
 Servo verticalMotor2;
 Servo rotationMotor;
 Servo pliersMotor;
 
+#define LEFT_MOTOR_FORWARD
+
+enum class Direction : uint8_t
+{
+    forward,
+    backward
+};
+
 void stopProgram();
-void setupMotors();
+void setupMotors()
+{
+    pinMode(LEFT_MOTOR_PWM_PIN, OUTPUT);
+    pinMode(LEFT_MOTOR_IN1_PIN, OUTPUT);
+    pinMode(LEFT_MOTOR_IN2_PIN, OUTPUT);
+
+    pinMode(RIGHT_MOTOR_PWM_PIN, OUTPUT);
+    pinMode(RIGHT_MOTOR_IN1_PIN, OUTPUT);
+    pinMode(RIGHT_MOTOR_IN2_PIN, OUTPUT);
+
+    rotationMotor.attach(handRotationPin);
+    verticalMotor1.attach(handVerticalPin1);
+    verticalMotor2.attach(handVerticalPin2);
+    pliersMotor.attach(pliersPin);
+}
+
+void enableLeftMotor(int speed, Direction direction)
+{
+    bool inPin1 = HIGH;
+    bool inPin2 = LOW;
+    if (direction == Direction::backward) {
+        inPin1 = LOW;
+        inPin2 = HIGH;
+    }
+    digitalWrite(LEFT_MOTOR_IN1_PIN, inPin1);
+    digitalWrite(LEFT_MOTOR_IN2_PIN, inPin2);
+    analogWrite(LEFT_MOTOR_PWM_PIN, speed);
+}
+
+void enableRightMotor(int speed, Direction direction)
+{
+    bool inPin1 = HIGH;
+    bool inPin2 = LOW;
+    if (direction == Direction::backward) {
+        inPin1 = LOW;
+        inPin2 = HIGH;
+    }
+    digitalWrite(RIGHT_MOTOR_IN1_PIN, inPin1);
+    digitalWrite(RIGHT_MOTOR_IN2_PIN, inPin2);
+    analogWrite(RIGHT_MOTOR_PWM_PIN, speed);
+}
+
+void moveCar(uint8_t stickX, uint8_t stickY)
+{
+    if (stickY == STICK_Y_CENTER_VALUE) {
+        if (stickX == STICK_X_CENTER_VALUE) {
+            enableLeftMotor(0, Direction::forward);
+            enableRightMotor(0, Direction::forward);
+        } else if (stickX < STICK_X_CENTER_VALUE) {
+            enableLeftMotor(200, Direction::backward);
+            enableRightMotor(200, Direction::forward);
+        } else {
+            enableLeftMotor(200, Direction::forward);
+            enableRightMotor(200, Direction::backward);
+        }
+    } else {
+        if (stickX == STICK_X_CENTER_VALUE) {
+            if (stickY > STICK_Y_CENTER_VALUE) {
+                const uint8_t amplitude = map(stickY, 127, 255, 0, 255);
+                Serial.print("Amp = ");
+                Serial.println(amplitude);
+                enableLeftMotor(amplitude, Direction::backward);
+                enableRightMotor(amplitude, Direction::backward);
+            } else {
+                const uint8_t amplitude = map(stickY, 127, 0, 0, 255);
+                Serial.print("Amp = ");
+                Serial.println(amplitude);
+                enableLeftMotor(amplitude, Direction::forward);
+                enableRightMotor(amplitude, Direction::forward);
+            }
+        } else if (stickX < STICK_X_CENTER_VALUE) {
+            enableLeftMotor(200, Direction::backward);
+            enableRightMotor(200, Direction::forward);
+        } else {
+            enableLeftMotor(200, Direction::forward);
+            enableRightMotor(200, Direction::backward);
+        }
+    }
+}
 
 void setup()
 {
@@ -46,7 +137,7 @@ void setup()
         Serial.print(", controllerType = ");
         Serial.print(static_cast<int>(controllerType));
         Serial.print(". Program execution stopped...");
-        //stopProgram();
+        // stopProgram();
     } else {
         Serial.print("Configuration successful.");
     }
@@ -59,41 +150,46 @@ void stopProgram()
     };
 }
 
-void setupMotors()
-{
-    rotationMotor.attach(handRotationPin);
-    verticalMotor1.attach(handVerticalPin1);
-    verticalMotor2.attach(handVerticalPin2);
-}
-
 void loop()
 {
     controller.readData();
 
+    const auto leftStickX = controller.analogButtonState(PSS_LX);
+    const auto leftStickY = controller.analogButtonState(PSS_LY);
+    Serial.print(leftStickX);
+    Serial.print(" ");
+    Serial.println(leftStickY);
+    moveCar(leftStickX, leftStickY);
+
     auto rightStick = controller.analogButtonState(PSS_RX);
-     auto rotation   = map(rightStick, 0, 256, 5, -5);
-    if (rotation < -1 || rotation > 1) {
-        Serial.print(rightStick);
-        Serial.print(" ");
-        Serial.print(rotation);
-        Serial.println(";");
+    if (rightStick < 92 || rightStick > 96) {
+        auto rotation = map(rightStick, 0, 256, 5, -5);
         rotationMotor.write(rotationMotor.read() + rotation);
     }
 
-    rightStick = controller.analogButtonState(PSS_RY);
-    rotation   = map(rightStick, 0, 256, -5, 5);
-    if (rotation < -1 || rotation > 1) {
-        Serial.print(rightStick);
-        Serial.print(" - ");
-        Serial.print(rotation);
-        Serial.println(";");
-        verticalMotor1.write(verticalMotor1.read() + rotation);
+    if (controller.buttonPressed(PSB_TRIANGLE)) {
+        verticalMotor1.write(verticalMotor1.read() + 3);
+        verticalMotor2.write(verticalMotor2.read() + 3);
+        Serial.println("TRIANGLE pressed");
+        // pliersMotor.write(pliersMotor.read() + 2);
+    } else if (controller.buttonPressed(PSB_CROSS)) {
+        verticalMotor1.write(verticalMotor1.read() - 3);
+        // pliersMotor.write(pliersMotor.read() - 2);
+        verticalMotor2.write(verticalMotor2.read() - 3);
+        Serial.println("CROSS pressed");
     }
 
-    if(controller.buttonPressed(PSB_TRIANGLE)){
-        verticalMotor2.write(verticalMotor2.read() + 3);
-    } else if (controller.buttonPressed(PSB_CROSS)){
-        verticalMotor2.write(verticalMotor2.read() - 3);
+    if (controller.buttonPressed(PSB_CIRCLE)) {
+        pliersMotor.write(pliersMotor.read() + 2);
+        Serial.println("PSB_CIRCLE pressed");
+    } else if (controller.buttonPressed(PSB_SQUARE)) {
+        pliersMotor.write(pliersMotor.read() - 2);
+        Serial.println("PSB_SQUARE pressed");
     }
+
+    // if (leftStick < 92 || leftStick > 96) {
+    //     analogWrite(LEFT_MOTOR_PIN_1, leftStick);
+    // }
+
     delay(readControllerDataDelay);
 }
