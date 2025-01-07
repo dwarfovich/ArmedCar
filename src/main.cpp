@@ -1,46 +1,46 @@
 #include <ps2.hpp>
 #include <Servo.h>
 
-constexpr uint8_t       selectPin               = 10;
-constexpr uint8_t       commandPin              = 11;
-constexpr uint8_t       dataPin                 = 12;
-constexpr uint8_t       clockPin                = 13;
-constexpr bool          pressureMode            = true;
-constexpr bool          enableRumble            = true;
-constexpr unsigned long baudRate                = 57600;
-constexpr unsigned long serialMonitorStartDelay = 300;
-constexpr unsigned long readControllerDataDelay = 50;
+#define BAUD_RATE 57600ul
+#define SERIAL_MONITOR_START_DELAY 300ul
+#define READ_CONTROLLER_DATA_DELAY 50ul
+
+#define SELECT_PIN 10
+#define COMMAND_PIN 11
+#define DATA_PIN 12
+#define CLOCK_PIN 13
+#define PRESSURE_MODE true
+#define ENABLE_RUMBLE true
 #define STICK_X_CENTER_VALUE 128
 #define STICK_Y_CENTER_VALUE 127
 
-constexpr int pliersPin        = 8;
-constexpr int handRotationPin  = 14;
-constexpr int handVerticalPin1 = 15;
-constexpr int handVerticalPin2 = 9;
+#define PLIERS_PIN 8
+#define HAND_ROTATION_PIN 14
+#define HAND_VERTICAL_PIN_1 15
+#define HAND_VERTICAL_PIN_2 9
 
-int LEFT_MOTOR_PWM_PIN  = 3;
-int LEFT_MOTOR_IN1_PIN  = 1;
-int LEFT_MOTOR_IN2_PIN  = 2;
-int RIGHT_MOTOR_PWM_PIN = 5;
-int RIGHT_MOTOR_IN1_PIN = 4;
-int RIGHT_MOTOR_IN2_PIN = 6;
-
-ps2::Controller     controller;
-ps2::ErrorCode      configurationErrorCode;
-ps2::ControllerType controllerType;
-
-Servo verticalMotor1;
-Servo verticalMotor2;
-Servo rotationMotor;
-Servo pliersMotor;
-
-#define LEFT_MOTOR_FORWARD
+#define LEFT_MOTOR_PWM_PIN 3
+#define LEFT_MOTOR_IN1_PIN 1
+#define LEFT_MOTOR_IN2_PIN 2
+#define RIGHT_MOTOR_PWM_PIN 5
+#define RIGHT_MOTOR_IN1_PIN 4
+#define RIGHT_MOTOR_IN2_PIN 6
+#define DEFAULT_ROTATION_AMPLITUDE 255
 
 enum class Direction : uint8_t
 {
     forward,
     backward
 };
+
+ps2::Controller     controller;
+ps2::ErrorCode      configurationErrorCode;
+ps2::ControllerType controllerType;
+
+Servo pliersMotor;
+Servo rotationMotor;
+Servo verticalMotor1;
+Servo verticalMotor2;
 
 void stopProgram();
 void setupMotors()
@@ -53,10 +53,10 @@ void setupMotors()
     pinMode(RIGHT_MOTOR_IN1_PIN, OUTPUT);
     pinMode(RIGHT_MOTOR_IN2_PIN, OUTPUT);
 
-    rotationMotor.attach(handRotationPin);
-    verticalMotor1.attach(handVerticalPin1);
-    verticalMotor2.attach(handVerticalPin2);
-    pliersMotor.attach(pliersPin);
+    rotationMotor.attach(HAND_ROTATION_PIN);
+    verticalMotor1.attach(HAND_VERTICAL_PIN_1);
+    verticalMotor2.attach(HAND_VERTICAL_PIN_2);
+    pliersMotor.attach(PLIERS_PIN);
 }
 
 void enableLeftMotor(int speed, Direction direction)
@@ -92,42 +92,46 @@ void moveCar(uint8_t stickX, uint8_t stickY)
             enableLeftMotor(0, Direction::forward);
             enableRightMotor(0, Direction::forward);
         } else if (stickX < STICK_X_CENTER_VALUE) {
-            enableLeftMotor(200, Direction::backward);
-            enableRightMotor(200, Direction::forward);
+            enableLeftMotor(DEFAULT_ROTATION_AMPLITUDE, Direction::backward);
+            enableRightMotor(DEFAULT_ROTATION_AMPLITUDE, Direction::forward);
         } else {
-            enableLeftMotor(200, Direction::forward);
-            enableRightMotor(200, Direction::backward);
+            enableLeftMotor(DEFAULT_ROTATION_AMPLITUDE, Direction::forward);
+            enableRightMotor(DEFAULT_ROTATION_AMPLITUDE, Direction::backward);
         }
     } else {
         if (stickX == STICK_X_CENTER_VALUE) {
             if (stickY > STICK_Y_CENTER_VALUE) {
-                const uint8_t amplitude = map(stickY, 127, 255, 0, 255);
-                Serial.print("Amp = ");
-                Serial.println(amplitude);
+                const uint8_t amplitude = map(stickY, STICK_Y_CENTER_VALUE, 255, 0, 255);
                 enableLeftMotor(amplitude, Direction::backward);
                 enableRightMotor(amplitude, Direction::backward);
             } else {
-                const uint8_t amplitude = map(stickY, 127, 0, 0, 255);
-                Serial.print("Amp = ");
-                Serial.println(amplitude);
+                const uint8_t amplitude = map(stickY, STICK_Y_CENTER_VALUE, 0, 0, 255);
                 enableLeftMotor(amplitude, Direction::forward);
                 enableRightMotor(amplitude, Direction::forward);
             }
-        } else if (stickX < STICK_X_CENTER_VALUE) {
-            enableLeftMotor(200, Direction::backward);
-            enableRightMotor(200, Direction::forward);
         } else {
-            enableLeftMotor(200, Direction::forward);
-            enableRightMotor(200, Direction::backward);
+            if (stickY < STICK_Y_CENTER_VALUE) {
+                const uint8_t amplitudeY = map(stickY, STICK_Y_CENTER_VALUE, 0, 0, 255);
+                const uint8_t amplitudeX = map(stickX, 0, STICK_X_CENTER_VALUE, 0, amplitudeY);
+                enableLeftMotor(amplitudeX, Direction::backward);
+                enableRightMotor(amplitudeY, Direction::forward);
+            } else {
+                const uint8_t amplitudeY = map(stickY, STICK_Y_CENTER_VALUE, 255, 0, 255);
+                const uint8_t amplitudeX = map(stickX, 0, STICK_X_CENTER_VALUE, 0, amplitudeY);
+                enableLeftMotor(amplitudeX, Direction::forward);
+                enableRightMotor(amplitudeY, Direction::backward);
+            }
         }
     }
 }
 
 void setup()
 {
-    Serial.begin(baudRate);
-    delay(serialMonitorStartDelay);
-    configurationErrorCode = controller.configure(clockPin, commandPin, selectPin, dataPin, pressureMode, enableRumble);
+    Serial.begin(BAUD_RATE);
+    delay(SERIAL_MONITOR_START_DELAY);
+    
+    configurationErrorCode =
+        controller.configure(CLOCK_PIN, COMMAND_PIN, SELECT_PIN, DATA_PIN, PRESSURE_MODE, ENABLE_RUMBLE);
     if (configurationErrorCode == ps2::ErrorCode::Success) {
         controllerType = controller.type();
     }
@@ -137,7 +141,7 @@ void setup()
         Serial.print(", controllerType = ");
         Serial.print(static_cast<int>(controllerType));
         Serial.print(". Program execution stopped...");
-        // stopProgram();
+        stopProgram();
     } else {
         Serial.print("Configuration successful.");
     }
@@ -156,40 +160,27 @@ void loop()
 
     const auto leftStickX = controller.analogButtonState(PSS_LX);
     const auto leftStickY = controller.analogButtonState(PSS_LY);
-    Serial.print(leftStickX);
-    Serial.print(" ");
-    Serial.println(leftStickY);
     moveCar(leftStickX, leftStickY);
 
-    auto rightStick = controller.analogButtonState(PSS_RX);
+    const auto rightStick = controller.analogButtonState(PSS_RX);
     if (rightStick < 92 || rightStick > 96) {
-        auto rotation = map(rightStick, 0, 256, 5, -5);
+        const auto rotation = map(rightStick, 0, 255, 5, -5);
         rotationMotor.write(rotationMotor.read() + rotation);
     }
 
     if (controller.buttonPressed(PSB_TRIANGLE)) {
         verticalMotor1.write(verticalMotor1.read() + 3);
         verticalMotor2.write(verticalMotor2.read() + 3);
-        Serial.println("TRIANGLE pressed");
-        // pliersMotor.write(pliersMotor.read() + 2);
     } else if (controller.buttonPressed(PSB_CROSS)) {
         verticalMotor1.write(verticalMotor1.read() - 3);
-        // pliersMotor.write(pliersMotor.read() - 2);
         verticalMotor2.write(verticalMotor2.read() - 3);
-        Serial.println("CROSS pressed");
     }
 
     if (controller.buttonPressed(PSB_CIRCLE)) {
         pliersMotor.write(pliersMotor.read() + 2);
-        Serial.println("PSB_CIRCLE pressed");
     } else if (controller.buttonPressed(PSB_SQUARE)) {
         pliersMotor.write(pliersMotor.read() - 2);
-        Serial.println("PSB_SQUARE pressed");
     }
 
-    // if (leftStick < 92 || leftStick > 96) {
-    //     analogWrite(LEFT_MOTOR_PIN_1, leftStick);
-    // }
-
-    delay(readControllerDataDelay);
+    delay(READ_CONTROLLER_DATA_DELAY);
 }
